@@ -1,19 +1,16 @@
-#1. pay attention to adding orders from previous year to input file
-#2. pay attention that currency file should contain data from previous year if trade was open previous year
-#3. edit output file so that sell and buy quantities for every ticker are zero (if subtotal is present
-#   then there is no need for edit)
-#4. specify input and output files and mode
-#    (SIMPLE mode: outputs trades with curexch info, NOT SIMPLE MODE: fullfills orders on FIFO rule)
-INPUT_FILE  = './2016_IB.csv'
-OUTPUT_FILE_TRADES = './2016_rub_trades.csv'
-OUTPUT_FILE_FEES   = './2016_rub_fees.csv'
-OUTPUT_FILE_DIVIDENDS = './2016_rub_dividends.csv'
+#1. pay attention that currency file should contain data from previous year if trade was open previous year
+#2. specify input and output files
+
+INPUT_FILE  = './2017_IB.csv'
+OUTPUT_FILE_TRADES = './2017_rub_trades.csv'
+OUTPUT_FILE_FEES   = './2017_rub_fees.csv'
+OUTPUT_FILE_DIVIDENDS = './2017_rub_dividends.csv'
 EXCH_FILE   = './usd_rub.txt'
-SIMPLE_MODE = False
 
 import csv
 import datetime
 import pandas as pd
+import collections
 
 #1. read source report into 'lines'
 with open( INPUT_FILE, newline='') as csvfile:
@@ -31,63 +28,63 @@ with open( EXCH_FILE ) as fileId:
 #3. trades report
 output = {}
 
-#Trades,Data,Order,Stocks,USD,AAPL,"2016-03-29, 10:08:48",100,106.08,107.68,-10608,-1,10609,0,160,O
-TICKER, DATETIME, Q, PRICE, CPRICE, TOTAL, COMM, BASIS, PL, MTM, TRADETYPE = range(5, 16);
+#0.Trades, 1.Header, 2.DataDiscriminator, 3.Asset Category, 4.Currency, 5.Symbol, 6.Date/Time, 7.Exchange,
+#8.Quantity, 9.T. Price, 10.C. Price, 11.Proceeds, 12.Comm/Fee, 13.Basis, 14.Realized P/L, 15.MTM P/L, 16.Code
+#Trades,Data,Order,Stocks,USD,AMD,"2017-02-01, 09:43:33",-,300,11.318333333,12.06,-3395.5,-1.4,3396.9,0,222.5,O;P
 
-orders = []
+TICKER, DATETIME, Q, PRICE, COMM, TRADETYPE = 5, 6, 8, 9, 12, 16
+open_orders = []
+close_orders = []
 for vals in lines:
-    if vals[0] != "Trades": continue
+    if vals[0] != "Trades": continue    
     if vals[1] == "Header": continue #TODO?: parse column names
     if vals[1] == "Total": continue
-    if vals[1] == "SubTotal":
-        orders.clear()
+    if vals[3] != "Stocks": continue
+    if vals[1] == "SubTotal": #process open and close orders for ticker
+        output[ ticker ] = collections.OrderedDict()
+        for date, q, price_usd, comm_usd in close_orders:
+            while q: #fill until q > 0
+                prev_date, prev_q, prev_price_usd, prev_comm_usd = open_orders.pop(0)               
+                
+                #open order
+                key = str(prev_date) + str(prev_price_usd)
+                if key not in output[ ticker ]: output[ ticker ][ key ] = [prev_date, 0, prev_price_usd, 0]
+                output[ticker][key][1] += prev_q
+                output[ticker][key][3] += prev_comm_usd
+
+                #close order
+                key = str(date) + str(price_usd)
+                if key not in output[ ticker ]: output[ticker][key] = [date, 0, price_usd, 0]
+                output[ticker][key][1] -= prev_q
+                output[ticker][key][3] += comm_usd
+
+                comm_usd = 0
+
+                q += prev_q
+                            
+                ## if 'ClosedLot' is not used:
+                #qq = min(abs(q),abs(prev_q)) * prev_q / abs(prev_q)
+                #prev_q, q = prev_q - qq, q + qq
+                #if prev_q != 0:
+                #    open_orders.insert(0, (prev_date, prev_q, prev_price_usd, 0) )
+
+        open_orders.clear()
+        close_orders.clear()
         continue
-    
+
     ticker = vals[ TICKER ]
-    if ticker not in output: output[ ticker ] = { }
     tradetype = vals[ TRADETYPE ]
-    q = int( vals[ Q ].replace(',',''))
-    date, time = vals[ DATETIME ].split(',')
+    q = float(vals[ Q ].replace(',',''))
+    date = vals[ DATETIME ].split(',')[0]
     date = datetime.datetime.strptime( date, '%Y-%m-%d' ).date()
     price_usd = float( vals[ PRICE ] )
-    comm_usd  = float( vals[ COMM ] )
+    comm_usd  = float( vals[ COMM ] ) if vals[ COMM ] else 0
 
-    if SIMPLE_MODE:
-        key = len(output[ticker])
-        output[ticker][key] = [date, q, price_usd, comm_usd]
-        continue
-    
-    if tradetype not in ["O","C","O;P","C;P"]:
-        print( "Trade type is unknown: ", tradetype )
-        break
-
-    if tradetype in ["O","O;P"]:
-        orders.append( (date, time, q, price_usd, comm_usd) )
-    else: #close order
-        key = str(date) + time + str(price_usd)
-        if key not in output[ ticker ]: output[ticker][key] = [date, 0, price_usd, 0]
-        output[ticker][key][3] += comm_usd
-        comm_usd = 0
-            
-        while q: #fill until q > 0
-            prev_date, prev_time, prev_q, prev_price_usd, prev_comm_usd = orders.pop(0)
-
-            qq = min(abs(q),abs(prev_q)) * prev_q / abs(prev_q)
-
-            #open order
-            key = str(prev_date) + prev_time + str(prev_price_usd)
-            if key not in output[ ticker ]: output[ ticker ][ key ] = [prev_date, 0, prev_price_usd, 0]
-            output[ticker][key][1] += qq
-            output[ticker][key][3] += prev_comm_usd
-
-            #close order
-            key = str(date) + time + str(price_usd)
-            output[ticker][key][1] -= qq
-
-            prev_q, q = prev_q - qq, q + qq
-
-            if prev_q != 0:
-                orders.insert(0, (prev_date, prev_time, prev_q, prev_price_usd, 0) )
+    #if vals[2] == "Order" and tradetype in ["O","O;P"]:
+    if vals[2] == "ClosedLot":
+        open_orders.append( (date, q, price_usd, comm_usd) )
+    elif vals[2] == "Order" and tradetype in ["C","C;P"]:
+        close_orders.append( (date, q, price_usd, comm_usd) )
 
 df = pd.DataFrame(columns=('Название акции', 'Дата', 'Кол-во', 'Цена акции(доллар)', 'Продажа(доллар)',
                            'Покупка(доллар)', 'Комиссия(доллар)', 'Курс доллара', 'Продажа(руб)',
@@ -99,8 +96,8 @@ subtotal_comm_usd = subtotal_comm_adj = 0
 subtotal_sell_usd = subtotal_buy_usd = 0
 subtotal_sell_adj = subtotal_buy_adj = 0
 for ticker in sorted(output):
-    for date_time in sorted(output[ticker]):
-        date, q, price_usd, comm_usd = output[ticker][date_time]
+    for key in output[ticker]:
+        date, q, price_usd, comm_usd = output[ticker][key]
         exch_rate = curexch[ date ]
         sell_usd = (-q if q < 0 else 0) * price_usd
         sell_adj = sell_usd * exch_rate
@@ -143,13 +140,19 @@ total_usd = total_adj = 0
 for vals in lines:
     if vals[0] not in [ "Interest", "Fees" ]: continue
     if vals[1] != "Data": continue
-    if vals[2] == "Total": continue
+    if "Total" in vals[2]: continue
 
+    currency = vals[2]
     index = 3 if vals[0] == "Interest" else 4
-    date = datetime.datetime.strptime( vals[ index + 0 ], '%m/%d/%Y').date()
+    date = datetime.datetime.strptime( vals[ index + 0 ], '%Y-%m-%d').date()
     desc = vals[ index + 1 ]
     amount_usd = float(vals[ index + 2 ])
-    amount_adj = amount_usd * curexch[ date ]
+    amount_adj = amount_usd * curexch[ date ]        
+
+    if currency == "RUB":
+        amount_usd = 0
+        amount_adj = amount_usd
+
     total_adj += amount_adj
     total_usd += amount_usd
 
@@ -167,7 +170,7 @@ for vals in lines:
     if vals[1] != "Data": continue
     if vals[2] == "Total": continue
     
-    date = datetime.datetime.strptime( vals[ 3 ], '%m/%d/%Y').date()
+    date = datetime.datetime.strptime( vals[ 3 ], '%Y-%m-%d').date()
     desc = vals[ 4 ]
     amount_usd = float(vals[ 5 ])
     amount_adj = amount_usd * curexch[ date ]
