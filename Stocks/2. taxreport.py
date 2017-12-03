@@ -42,9 +42,16 @@ for vals in lines:
     if vals[3] != "Stocks": continue
     if vals[1] == "SubTotal": #process open and close orders for ticker
         output[ ticker ] = collections.OrderedDict()
-        for date, q, price_usd, comm_usd in close_orders:
+        for date, q, price_usd, comm_usd, tradetype in close_orders:
             while q: #fill until q > 0
-                prev_date, prev_q, prev_price_usd, prev_comm_usd = open_orders.pop(0)               
+                prev_date, prev_q, prev_price_usd, prev_comm_usd = open_orders[0]               
+                if prev_q * q > 0: #"C;O;P" trade
+                    if tradetype != "C;O;P":
+                        print("algorithm is broken: tradetype != C;O;P, but quantity is not filled")
+                        break
+                    else:
+                        break
+                open_orders.pop(0)
                 
                 #open order
                 key = str(prev_date) + str(prev_price_usd)
@@ -79,12 +86,12 @@ for vals in lines:
     date = datetime.datetime.strptime( date, '%Y-%m-%d' ).date()
     price_usd = float( vals[ PRICE ] )
     comm_usd  = float( vals[ COMM ] ) if vals[ COMM ] else 0
-
+    
     #if vals[2] == "Order" and tradetype in ["O","O;P"]:
     if vals[2] == "ClosedLot":
         open_orders.append( (date, q, price_usd, comm_usd) )
-    elif vals[2] == "Order" and tradetype in ["C","C;P"]:
-        close_orders.append( (date, q, price_usd, comm_usd) )
+    elif vals[2] == "Order" and tradetype in ["C","C;P","C;L;P","C;O;P","C;L"]:
+        close_orders.append( (date, q, price_usd, comm_usd, tradetype) )
 
 df = pd.DataFrame(columns=('Название акции', 'Дата', 'Кол-во', 'Цена акции(доллар)', 'Продажа(доллар)',
                            'Покупка(доллар)', 'Комиссия(доллар)', 'Курс доллара', 'Продажа(руб)',
