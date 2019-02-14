@@ -1,10 +1,10 @@
 #1. pay attention that currency file should contain data from previous year if trade was open previous year
 #2. specify input and output files
 
-INPUT_FILE  = './2017_IB.csv'
-OUTPUT_FILE_TRADES = './2017_rub_trades.csv'
-OUTPUT_FILE_FEES   = './2017_rub_fees.csv'
-OUTPUT_FILE_DIVIDENDS = './2017_rub_dividends.csv'
+INPUT_FILE  = './2018_IB.csv'
+OUTPUT_FILE_TRADES = './2018_rub_trades.csv'
+OUTPUT_FILE_FEES   = './2018_rub_fees.csv'
+OUTPUT_FILE_DIVIDENDS = './2018_rub_dividends.csv'
 EXCH_FILE   = './usd_rub.txt'
 
 import csv
@@ -39,15 +39,17 @@ for vals in lines:
     if vals[0] != "Trades": continue    
     if vals[1] == "Header": continue #TODO?: parse column names
     if vals[1] == "Total": continue
-    if vals[3] != "Stocks": continue
+    if vals[3] not in ["Stocks", "Equity and Index Options"]: continue
     if vals[1] == "SubTotal": #process open and close orders for ticker
+        print(ticker)
         output[ ticker ] = collections.OrderedDict()
         for date, q, price_usd, comm_usd, tradetype in close_orders:
             while q: #fill until q > 0
                 prev_date, prev_q, prev_price_usd, prev_comm_usd = open_orders[0]               
-                if prev_q * q > 0: #"C;O;P" trade
-                    if tradetype != "C;O;P":
-                        print("algorithm is broken: tradetype != C;O;P, but quantity is not filled")
+                
+                if prev_q * q > 0: #"C;O" trade
+                    if tradetype not in ["C;O;P", "C;O"]:
+                        print("algorithm is broken: tradetype != C;O;P or C;O, but quantity is not filled")
                         break
                     else:
                         break
@@ -82,6 +84,8 @@ for vals in lines:
     ticker = vals[ TICKER ]
     tradetype = vals[ TRADETYPE ]
     q = float(vals[ Q ].replace(',',''))
+    if vals[3] == "Equity and Index Options":
+        q *= 100
     date = vals[ DATETIME ].split(',')[0]
     date = datetime.datetime.strptime( date, '%Y-%m-%d' ).date()
     price_usd = float( vals[ PRICE ] )
@@ -90,8 +94,9 @@ for vals in lines:
     #if vals[2] == "Order" and tradetype in ["O","O;P"]:
     if vals[2] == "ClosedLot":
         open_orders.append( (date, q, price_usd, comm_usd) )
-    elif vals[2] == "Order" and tradetype in ["C","C;P","C;L;P","C;O;P","C;L"]:
+    elif vals[2] == "Order" and tradetype in ["C","C;P","C;L;P","C;O;P","C;L","C;O","A;C","C;Ep"]:
         close_orders.append( (date, q, price_usd, comm_usd, tradetype) )
+
 
 df = pd.DataFrame(columns=('Название акции', 'Дата', 'Кол-во', 'Цена акции(доллар)', 'Продажа(доллар)',
                            'Покупка(доллар)', 'Комиссия(доллар)', 'Курс доллара', 'Продажа(руб)',
