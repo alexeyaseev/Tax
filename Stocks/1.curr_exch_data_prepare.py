@@ -7,9 +7,9 @@ data = {}
 firstDate = lastDate = ''
 with open('./usd_rub_CBR.txt') as fileId:
     for line in fileId.readlines():
-        date, price = line.split('\t')
-        date = datetime.datetime.strptime(date, '%m/%d/%Y').date()
-        price = price.strip()
+        date, _, price = line.split('\t')
+        date = datetime.datetime.strptime(date, '%d.%m.%Y').date()
+        price = price.strip().replace(',','.')
         if not data: firstDate = date
         data[ date ] = price.strip()        
         lastDate = date

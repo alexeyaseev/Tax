@@ -1,10 +1,10 @@
 #1. pay attention that currency file should contain data from previous year if trade was open previous year
 #2. specify input and output files
 
-INPUT_FILE  = './2018_IB.csv'
-OUTPUT_FILE_TRADES = './2018_rub_trades.csv'
-OUTPUT_FILE_FEES   = './2018_rub_fees.csv'
-OUTPUT_FILE_DIVIDENDS = './2018_rub_dividends.csv'
+INPUT_FILE  = './2019_IB.csv'
+OUTPUT_FILE_TRADES = './2019_rub_trades.csv'
+OUTPUT_FILE_FEES   = './2019_rub_fees.csv'
+OUTPUT_FILE_DIVIDENDS = './2019_rub_dividends.csv'
 EXCH_FILE   = './usd_rub.txt'
 
 import csv
@@ -96,7 +96,6 @@ for vals in lines:
         open_orders.append( (date, q, price_usd, comm_usd) )
     elif vals[2] == "Order" and tradetype in ["C","C;P","C;L;P","C;O;P","C;L","C;O","A;C","C;Ep"]:
         close_orders.append( (date, q, price_usd, comm_usd, tradetype) )
-
 
 df = pd.DataFrame(columns=('Название акции', 'Дата', 'Кол-во', 'Цена акции(доллар)', 'Продажа(доллар)',
                            'Покупка(доллар)', 'Комиссия(доллар)', 'Курс доллара', 'Продажа(руб)',
