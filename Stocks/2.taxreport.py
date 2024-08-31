@@ -1,10 +1,11 @@
 #1. pay attention that currency file should contain data from previous year if trade was open previous year
 #2. specify input and output files
 
-INPUT_FILE  = './2019_IB.csv'
-OUTPUT_FILE_TRADES = './2019_rub_trades.csv'
-OUTPUT_FILE_FEES   = './2019_rub_fees.csv'
-OUTPUT_FILE_DIVIDENDS = './2019_rub_dividends.csv'
+YEAR = '2021'
+INPUT_FILE  = f'./{YEAR}_IB.csv'
+OUTPUT_FILE_TRADES = f'./{YEAR}_rub_trades.csv'
+OUTPUT_FILE_FEES   = f'./{YEAR}_rub_fees.csv'
+OUTPUT_FILE_DIVIDENDS = f'./{YEAR}_rub_dividends.csv'
 EXCH_FILE   = './usd_rub.txt'
 
 import csv
